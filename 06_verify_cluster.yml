@@ -1,0 +1,35 @@
+---
+- name: Verify Kubernetes cluster functionality
+  hosts: localhost  # С control-node
+  become: no
+  tasks:
+    - name: Create test namespace
+      ansible.builtin.command: kubectl create namespace test --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy test nginx
+      ansible.builtin.command: kubectl create deployment nginx-test --image=nginx:alpine -n test
+
+    - name: Expose deployment
+      ansible.builtin.command: kubectl expose deployment nginx-test --port=80 --target-port=80 -n test --type=ClusterIP
+
+    - name: Wait for test pod
+      ansible.builtin.command: kubectl wait --for=condition=ready pod -l app=nginx-test -n test --timeout=120s
+
+    - name: Check test pods
+      ansible.builtin.command: kubectl get pods -n test -o wide
+      register: test_pods
+
+    - name: Display test pods
+      ansible.builtin.debug:
+        msg: "{{ test_pods.stdout }}"
+
+    - name: Test service connectivity
+      ansible.builtin.command: kubectl run test-curl --image=curlimages/curl -i --rm --restart=Never -- curl -s http://nginx-test.test:80
+      register: curl_test
+
+    - name: Display curl test
+      ansible.builtin.debug:
+        msg: "Service test result: {{ curl_test.stdout }}"
+
+    - name: Cleanup
+      ansible.builtin.command: kubectl delete namespace test

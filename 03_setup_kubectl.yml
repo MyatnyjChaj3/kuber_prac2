@@ -1,0 +1,35 @@
+---
+- name: Setup kubectl access on ansible-control node
+  hosts: localhost  # Запускаем локально или на ansible-control
+  become: no
+  tasks:
+    - name: Fetch kubeconfig from master
+      ansible.builtin.fetch:
+        src: /home/admin/.kube/config
+        dest: /home/admin/.kube/config
+        flat: yes
+      delegate_to: k8s-master-01
+
+    - name: Update kubeconfig with master IP
+      ansible.builtin.replace:
+        path: /home/admin/.kube/config
+        regexp: 'server: https://kubernetes.default.svc'
+        replace: "server: https://{{ hostvars['k8s-master-01']['ansible_default_ipv4']['address'] }}:6443"
+
+    - name: Set permissions on kubeconfig
+      ansible.builtin.file:
+        path: /home/admin/.kube/config
+        mode: 0600
+
+    - name: Install kubectl on control node
+      ansible.builtin.apt:
+        name: kubectl
+        state: present
+
+    - name: Verify kubectl access
+      ansible.builtin.command: kubectl get nodes
+      register: kubectl_nodes
+
+    - name: Display nodes
+      ansible.builtin.debug:
+        msg: "{{ kubectl_nodes.stdout }}"
